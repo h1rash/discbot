@@ -1,11 +1,12 @@
 import { Message } from "discord.js";
+import { getInhouseFighter } from "../../channels/channels";
 import { getActiveGameModes, getModeChosen } from "../../game/gameModes";
-import { print, shuffle } from '../../tools/f';
+import { deleteDiscMessage, print, shuffle } from '../../tools/f';
 
 
-
-const startMessage = 'Inhouse Temperature Check:\n';
-const endMessage = 'React on all timeslots which work for you and then we look for the most suitable time';
+// @${getInhouseFighter()}
+const startMessage = `Inhouse Temperature Check:\n`;
+const endMessage = 'React on all timeslots which work for you and then we look for the most suitable time.\nIf you read this but can\'t play today, react with :x:';
 const rowMessage = '\t- $$emoji$$ for $$game$$ Inhouse (Start $$start-time$$$$end-time$$)\n';
 const withEnd = '-$$end-time$$';
 const withNoEnd = ' +';
@@ -14,8 +15,8 @@ const globalEmojiList = [
   { icon: '🐒', title: 'monkey' },
   { icon: '🐯', title: 'tiger' },
   { icon: '🦓', title: 'zebra' },
-  { icon: '🐪', title: 'camel' },
-  { icon: '🐇', title: 'rabbit' },
+  { icon: '🐪', title: 'dromedary_camel' },
+  { icon: '🐇', title: 'rabbit2' },
   { icon: '🦁', title: 'lion' },
   { icon: '👌', title: 'ok_hand' },
   { icon: '👾', title: 'space_invader' },
@@ -24,6 +25,8 @@ const globalEmojiList = [
   { icon: '😺', title: 'smiley_cat' },
   { icon: '🙀', title: 'heart_eyes_cat' },
 ];
+
+const emoji_error = '❌';
 
 let activeGlobalEmojiList;
 
@@ -51,7 +54,7 @@ const gameString = (game, startTime, index, hours): string => {
   return s;
 }
 
-const generateGameTimeString = (gameOptions: string[], startTime, hours): string => {
+export const generateGameTimeString = (gameOptions: string[], startTime, hours): string => {
   let s = startMessage;
   console.log('@generateGameTimeString', gameOptions, startTime, hours);
   gameOptions.forEach((gameName, index) => {
@@ -69,12 +72,15 @@ export const getTimePeriods = (options: string[]) => {
     let option = options[i];
     let hours = [];
     try {
+      if (Array.isArray(option)) continue;
       let num = parseInt(option);
       if (!startHour || num < startHour) startHour = num;
-      if (!endHour || num < endHour) endHour = num;
+      if (!endHour || num > endHour) endHour = num;
+      console.log('@Option', option, num, startHour, endHour);
       hours.push(num);
     } catch (e) {
       // Do nothing
+      console.log('@Unable to parseInt', option);
     }
   }
   return {
@@ -99,22 +105,27 @@ export const temperatureCheckCommand = (message: Message, options) => {
   const startTime = startHour || 20;
   let hours = 3;
   if (endHour && startHour) {
-    hours = endHour - startHour;
+    hours = endHour - startHour + 1;
   }
+  console.log('@temperatureCheck Times:', startTime, hours, startHour, endHour);
 
   // Set global emoji reactions
-  activeGlobalEmojiList = globalEmojiList.slice(0, hours * gameOptions.length);
-
-  const temperatureMessage = generateGameTimeString(gameOptions, startTime, hours);
-  print(message, temperatureMessage, callbackMessageTemperature);
-  // TODO: Store reference to temperatureMessage
-
-  
+  const emojiAmount = hours * gameOptions.length
+  if (emojiAmount > globalEmojiList.length) {
+    print(message, '(Not enough emojis to support this amount)');
+  } else {
+    activeGlobalEmojiList = globalEmojiList.slice(0, emojiAmount);
+    const temperatureMessage = generateGameTimeString(gameOptions, startTime, hours);
+    print(message, temperatureMessage, callbackMessageTemperature);
+    // TODO: Store reference to temperatureMessage
+  }  
 }
 
 const callbackMessageTemperature = (message) => {
   // Add reactions
+  message.react(emoji_error);
   activeGlobalEmojiList.forEach(emoji => {
     message.react(emoji.icon);
   })
+  deleteDiscMessage(message, 24 * 3600 * 1000, 'messageTemperature');
 }
